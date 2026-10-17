@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LEX SYSTEM — Control de Casos Jurídicos Cloud</title>
+    
+    <!-- PWA Web App Manifest Link -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Supabase JS Client CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: {
+                            800: '#0f172a',
+                            900: '#0a0f1d',
+                            950: '#050811',
+                        },
+                        gold: {
+                            400: '#fbbf24',
+                            500: '#f59e0b',
+                            600: '#d97706',
+                            700: '#b45309',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Cinzel', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printable-area, #printable-area * {
+                visibility: visible;
+            }
+            #printable-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white;
+                color: black;
+                padding: 20px;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="h-full font-sans text-slate-800 antialiased flex flex-col bg-slate-50">
+
+    <!-- Toast Notification Box Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- PANTALLA 1: MODAL DE CONFIGURACIÓN DE SUPABASE (Si no está configurado) -->
+    <div id="modal-config-supabase" class="fixed inset-0 z-50 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
+            <div class="text-center mb-6">
+                <div class="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+                </div>
+                <h2 class="font-serif font-bold text-xl text-navy-900">Conectar con Supabase Cloud</h2>
+                <p class="text-xs text-slate-500 mt-1">Ingresa las credenciales de tu proyecto Supabase para sincronizar tus casos jurídicos en la nube.</p>
+            </div>
+            <form onsubmit="guardarConfigSupabase(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Project URL <span class="text-rose-500">*</span></label>
+                    <input type="url" id="cfg-supabase-url" required placeholder="https://xyzcompany.supabase.co" class="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">API Key (anon public) <span class="text-rose-500">*</span></label>
+                    <input type="text" id="cfg-supabase-key" required placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." class="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none">
+                </div>
+                <div class="pt-2">
+                    <button type="submit" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg transition shadow">
+                        Guardar & Conectar
+                    </button>
+                    <button type="button" onclick="usarModoDemoLocal()" class="w-full mt-2 py-2 text-slate-500 hover:text-slate-800 text-xs font-medium">
+                        Continuar en Modo Local / Demo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- PANTALLA 2: FORMULARIO DE LOGIN -->
+    <div id="login-container" class="fixed inset-0 z-40 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100">
+            <div class="bg-navy-900 px-6 py-8 text-center border-b border-gold-500/30">
+                <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-gold-400 to-gold-600 mx-auto flex items-center justify-center text-navy-900 shadow-lg mb-3">
+                    <i class="fa-solid fa-scale-balanced text-3xl"></i>
+                </div>
+                <h2 class="font-serif text-2xl font-bold text-amber-50">LEX SYSTEM</h2>
+                <p class="text-xs text-gold-400 font-medium tracking-wider uppercase mt-1">Sincronización Cloud Legal</p>
+            </div>
+
+            <form id="form-login" onsubmit="iniciarSesion(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Correo Electrónico / Usuario <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                        <i class="fa-solid fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="login-user" required placeholder="admin@lexsystem.com" class="w-full pl-10 pr-3.5 py-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Contraseña <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                        <i class="fa-solid fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input type="password" id="login-pass" required placeholder="••••••••" class="w-full pl-10 pr-3.5 py-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none">
+                    </div>
+                </div>
+
+                <div id="login-error-msg" class="hidden text-xs text-rose-600 bg-rose-50 p-3 rounded-lg border border-rose-200 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span id="login-error-text">Usuario o contraseña incorrectos.</span>
+                </div>
+
+                <button type="submit" class="w-full py-3 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-600 hover:to-gold-700 text-navy-900 font-bold text-sm rounded-lg shadow-md transition duration-200">
+                    Ingresar al Sistema
+                </button>
+
+                <div class="pt-2 text-center flex justify-between text-xs text-slate-400 border-t border-slate-100">
+                    <button type="button" onclick="openModal('modal-config-supabase')" class="hover:text-gold-600 transition">
+                        <i class="fa-solid fa-gear mr-1"></i>Configurar Supabase
+                    </button>
+                    <span id="label-modo-cloud" class="text-emerald-600 font-medium"><i class="fa-solid fa-cloud mr-1"></i>Cloud Activado</span>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- PANTALLA 3: APLICACIÓN PRINCIPAL (Dashboard) -->
+    <div id="app-content" class="hidden min-h-full flex flex-col">
+        
+        <!-- Header Navigation Bar -->
+        <header class="bg-navy-900 text-white shadow-xl border-b border-gold-500/30 sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-20">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-navy-900 shadow-md">
+                            <i class="fa-solid fa-scale-balanced text-2xl"></i>
+                        </div>
+                        <div>
+                            <h1 class="font-serif text-xl sm:text-2xl font-bold tracking-wide text-amber-50">LEX SYSTEM</h1>
+                            <p class="text-xs text-gold-400 font-medium tracking-wider uppercase">Cloud Sync Active</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button onclick="openModal('modal-nuevo-caso')" class="bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-600 hover:to-gold-700 text-navy-900 font-semibold px-4 py-2.5 rounded-lg shadow-md transition duration-200 flex items-center space-x-2 text-sm">
+                            <i class="fa-solid fa-folder-plus"></i>
+                            <span class="hidden sm:inline">Nuevo Caso</span>
+                        </button>
+                        <button onclick="openModal('modal-nuevo-abono')" class="bg-navy-800 hover:bg-slate-800 text-amber-100 border border-gold-500/40 font-semibold px-4 py-2.5 rounded-lg shadow-md transition duration-200 flex items-center space-x-2 text-sm">
+                            <i class="fa-solid fa-hand-holding-dollar text-gold-400"></i>
+                            <span class="hidden sm:inline">Registrar Abono</span>
+                        </button>
+                        <button onclick="cerrarSesion()" title="Cerrar Sesión" class="p-2.5 text-slate-400 hover:text-rose-400 hover:bg-navy-800 rounded-lg transition">
+                            <i class="fa-solid fa-right-from-bracket text-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Container -->
+        <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+            
+            <!-- KPI Dashboard Cards Section -->
+            <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 hover:shadow-md transition">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Casos Registrados</p>
+                            <h3 id="kpi-total-casos" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                            <i class="fa-solid fa-folder-open text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 hover:shadow-md transition">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Honorarios</p>
+                            <h3 id="kpi-total-honorarios" class="text-2xl font-bold text-slate-800 mt-1">$0.00</h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                            <i class="fa-solid fa-file-invoice-dollar text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 hover:shadow-md transition">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Recaudado</p>
+                            <h3 id="kpi-total-cobrado" class="text-2xl font-bold text-emerald-600 mt-1">$0.00</h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+                            <i class="fa-solid fa-circle-check text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 hover:shadow-md transition">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Saldo Adeudado</p>
+                            <h3 id="kpi-total-pendiente" class="text-2xl font-bold text-rose-600 mt-1">$0.00</h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600">
+                            <i class="fa-solid fa-clock text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Main Cases Table & Controls Section -->
+            <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-5 border-b border-slate-200 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-navy-900 font-serif">Directorio de Casos & Estado de Cuentas</h2>
+                        <p class="text-xs text-slate-500">Gestione los saldos sincronizados en tiempo real.</p>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <div class="relative min-w-[240px]">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" id="input-busqueda" oninput="filtrarCasos()" placeholder="Buscar cliente o Nº de caso..." class="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none">
+                        </div>
+
+                        <select id="select-filtro-estado" onchange="filtrarCasos()" class="py-2 px-3 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none text-slate-700">
+                            <option value="TODOS">Todos los Estados</option>
+                            <option value="PENDIENTE">Pendientes (Sin Abono)</option>
+                            <option value="PARCIAL">Abonados Parcialmente</option>
+                            <option value="PAGADO">Pagados Totalmente</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100/80 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                                <th class="py-3.5 px-4">Cliente / Asunto</th>
+                                <th class="py-3.5 px-4">Nº de Caso</th>
+                                <th class="py-3.5 px-4 text-right">Costo Total</th>
+                                <th class="py-3.5 px-4 text-right">Abonado</th>
+                                <th class="py-3.5 px-4 text-right">Valor Adeudado</th>
+                                <th class="py-3.5 px-4 text-center">Estado</th>
+                                <th class="py-3.5 px-4 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-casos-body" class="divide-y divide-slate-200 text-sm">
+                            <!-- JS content -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="empty-state" class="hidden p-12 text-center">
+                    <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+                        <i class="fa-solid fa-folder-open text-2xl"></i>
+                    </div>
+                    <h3 class="text-base font-semibold text-slate-700">No hay registros</h3>
+                    <button onclick="openModal('modal-nuevo-caso')" class="mt-4 inline-flex items-center space-x-2 px-4 py-2 bg-navy-900 text-gold-400 text-xs font-semibold rounded-lg hover:bg-slate-800 transition">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Registrar Primer Caso</span>
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <footer class="bg-white border-t border-slate-200 py-6 mt-auto">
+            <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500">
+                <p>&copy; <span id="current-year"></span> LEX SYSTEM — Cloud Database Sync. Todos los derechos reservados.</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- MODAL 1: Registrar Nuevo Caso -->
+    <div id="modal-nuevo-caso" class="fixed inset-0 z-40 hidden overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100">
+            <div class="bg-navy-900 px-6 py-4 flex items-center justify-between border-b border-gold-500/30">
+                <div class="flex items-center space-x-3">
+                    <div class="w-9 h-9 rounded-lg bg-gold-500/20 text-gold-400 flex items-center justify-center">
+                        <i class="fa-solid fa-briefcase"></i>
+                    </div>
+                    <h3 class="font-serif font-bold text-white text-lg">Nuevo Caso Jurídico</h3>
+                </div>
+                <button onclick="closeModal('modal-nuevo-caso')" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <form id="form-nuevo-caso" onsubmit="guardarNuevoCaso(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Nombre Completo del Cliente <span class="text-rose-500">*</span></label>
+                    <input type="text" id="caso-cliente" required placeholder="Ej. Dr. Carlos Rodríguez" class="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Nº de Caso / Expediente <span class="text-rose-500">*</span></label>
+                        <input type="text" id="caso-numero" required placeholder="Ej. CJ-2026-88" class="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Ámbito / Asunto <span class="text-rose-500">*</span></label>
+                        <select id="caso-asunto" required class="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none">
+                            <option value="">Seleccione...</option>
+                            <option value="Civil">Derecho Civil</option>
+                            <option value="Penal">Derecho Penal</option>
+                            <option value="Laboral">Derecho Laboral</option>
+                            <option value="Comercial">Derecho Comercial</option>
+                            <option value="Familia">Derecho de Familia</option>
+                            <option value="Corporativo">Derecho Corporativo</option>
+                            <option value="Otro">Otro Asunto</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Honorarios Total Asignado ($) <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-slate-400">$</span>
+                        <input type="number" id="caso-costo" step="0.01" min="0" required placeholder="0.00" class="w-full pl-8 pr-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none font-semibold text-slate-800">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Observaciones</label>
+                    <textarea id="caso-notas" rows="3" placeholder="Detalles particulares del caso..." class="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none resize-none"></textarea>
+                </div>
+
+                <div class="pt-4 border-t border-slate-100 flex justify-end space-x-3">
+                    <button type="button" onclick="closeModal('modal-nuevo-caso')" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition">Cancelar</button>
+                    <button type="submit" class="px-5 py-2 text-xs font-semibold bg-navy-900 text-gold-400 rounded-lg hover:bg-slate-800 transition shadow">Guardar Caso en Cloud</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Registrar Abono -->
+    <div id="modal-nuevo-abono" class="fixed inset-0 z-40 hidden overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100">
+            <div class="bg-navy-900 px-6 py-4 flex items-center justify-between border-b border-gold-500/30">
+                <div class="flex items-center space-x-3">
+                    <div class="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <i class="fa-solid fa-money-bill-wave"></i>
+                    </div>
+                    <h3 class="font-serif font-bold text-white text-lg">Registrar Pago / Abono</h3>
+                </div>
+                <button onclick="closeModal('modal-nuevo-abono')" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <form id="form-nuevo-abono" onsubmit="guardarNuevoAbono(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Seleccionar Cliente / Caso <span class="text-rose-500">*</span></label>
+                    <select id="abono-caso-id" required onchange="actualizarInfoPendienteAbono()" class="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none">
+                    </select>
+                </div>
+
+                <div id="abono-info-box" class="hidden bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs flex justify-between items-center">
+                    <div>
+                        <span class="text-slate-500 block">Saldo Actual Pendiente:</span>
+                        <span id="abono-info-pendiente" class="font-bold text-rose-600 text-sm">$0.00</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-slate-500 block">Costo Asignado:</span>
+                        <span id="abono-info-total" class="font-semibold text-slate-700">$0.00</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Monto del Abono ($) <span class="text-rose-500">*</span></label>
+                        <div class="relative">
+                            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-slate-400">$</span>
+                            <input type="number" id="abono-monto" step="0.01" min="0.01" required placeholder="0.00" class="w-full pl-8 pr-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none font-semibold text-emerald-700">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Método de Pago <span class="text-rose-500">*</span></label>
+                        <select id="abono-metodo" required class="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none">
+                            <option value="Transferencia Bancaria">Transferencia Bancaria</option>
+                            <option value="Efectivo">Efectivo</option>
+                            <option value="Tarjeta de Crédito/Débito">Tarjeta de Crédito/Débito</option>
+                            <option value="Cheque">Cheque</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Comprobante / Detalle</label>
+                    <input type="text" id="abono-comprobante" placeholder="Ej. Depósito #98231" class="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-gold-500 outline-none">
+                </div>
+
+                <div class="pt-4 border-t border-slate-100 flex justify-end space-x-3">
+                    <button type="button" onclick="closeModal('modal-nuevo-abono')" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition">Cancelar</button>
+                    <button type="submit" class="px-5 py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition shadow">Procesar Abono en Cloud</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 3: Recibo / Estado de Cuenta -->
+    <div id="modal-historial" class="fixed inset-0 z-40 hidden overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-100 my-8">
+            <div class="bg-navy-900 px-6 py-4 flex items-center justify-between border-b border-gold-500/30 no-print">
+                <div class="flex items-center space-x-3">
+                    <div class="w-9 h-9 rounded-lg bg-gold-500/20 text-gold-400 flex items-center justify-center">
+                        <i class="fa-solid fa-receipt"></i>
+                    </div>
+                    <h3 class="font-serif font-bold text-white text-lg">Estado de Cuenta & Historial</h3>
+                </div>
+                <button onclick="closeModal('modal-historial')" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <div id="printable-area" class="p-6 sm:p-8 space-y-6">
+                <div class="flex justify-between items-start border-b border-slate-200 pb-6">
+                    <div>
+                        <h2 class="font-serif text-2xl font-bold text-navy-900">LEX SYSTEM</h2>
+                        <p class="text-xs text-slate-500">Comprobante Oficial de Estado de Cuenta</p>
+                    </div>
+                    <div class="text-right">
+                        <span id="detalle-fecha-impresion" class="text-xs text-slate-400 block">Fecha: --/--/----</span>
+                        <span id="detalle-badge-estado" class="mt-2 inline-block px-3 py-1 text-xs font-bold rounded-full bg-slate-100 text-slate-700">ESTADO</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 rounded-xl p-4 border border-slate-200 text-xs">
+                    <div>
+                        <p class="text-slate-500 font-semibold uppercase">Cliente:</p>
+                        <p id="detalle-cliente" class="text-sm font-bold text-slate-800 mt-0.5">--</p>
+                    </div>
+                    <div>
+                        <p class="text-slate-500 font-semibold uppercase">Número de Caso:</p>
+                        <p id="detalle-caso-num" class="text-sm font-bold text-slate-800 mt-0.5">--</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div class="p-3 bg-slate-100 rounded-lg border border-slate-200">
+                        <span class="text-[10px] text-slate-500 font-semibold uppercase block">Honorarios</span>
+                        <span id="detalle-costo-total" class="text-sm font-bold text-slate-800">$0.00</span>
+                    </div>
+                    <div class="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                        <span class="text-[10px] text-emerald-700 font-semibold uppercase block">Abonado</span>
+                        <span id="detalle-total-abonado" class="text-sm font-bold text-emerald-700">$0.00</span>
+                    </div>
+                    <div class="p-3 bg-rose-50 rounded-lg border border-rose-200">
+                        <span class="text-[10px] text-rose-700 font-semibold uppercase block">Saldo Pendiente</span>
+                        <span id="detalle-valor-adeudado" class="text-sm font-bold text-rose-700">$0.00</span>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="font-serif font-bold text-slate-800 text-sm mb-3">Historial de Pagos Registrados</h4>
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-300 bg-slate-100 text-slate-600 font-semibold">
+                                <th class="py-2 px-3">Fecha</th>
+                                <th class="py-2 px-3">Método</th>
+                                <th class="py-2 px-3">Comprobante</th>
+                                <th class="py-2 px-3 text-right">Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detalle-tabla-abonos" class="divide-y divide-slate-200"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-between items-center no-print">
+                <button onclick="window.print()" class="px-4 py-2 bg-slate-800 text-white text-xs font-semibold rounded-lg hover:bg-slate-900 transition flex items-center space-x-2">
+                    <i class="fa-solid fa-print"></i>
+                    <span>Imprimir / Exportar Recibo</span>
+                </button>
+                <button onclick="closeModal('modal-historial')" class="px-4 py-2 bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // Default Local Storage Fallback Key
+        const LOCAL_STORAGE_KEY = 'LEX_SYSTEM_CASOS_LOCAL';
+        
+        // Supabase State
+        let supabaseClient = null;
+        let modoCloud = false;
+        let casos = [];
+
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('current-year').innerText = new Date().getFullYear();
+            inicializarSupabase();
+        });
+
+        // Initialize Supabase Client if Configured
+        function inicializarSupabase() {
+            const url = localStorage.getItem('LEX_SUPABASE_URL');
+            const key = localStorage.getItem('LEX_SUPABASE_KEY');
+
+            if (url && key && window.supabase) {
+                try {
+                    supabaseClient = window.supabase.createClient(url, key);
+                    modoCloud = true;
+                    document.getElementById('label-modo-cloud').innerHTML = '<i class="fa-solid fa-cloud mr-1"></i>Cloud Activado';
+                    document.getElementById('label-modo-cloud').className = 'text-emerald-600 font-medium';
+                } catch (err) {
+                    console.error('Error inicializando Supabase:', err);
+                    usarModoDemoLocal();
+                }
+            } else {
+                usarModoDemoLocal();
+            }
+        }
+
+        function guardarConfigSupabase(e) {
+            e.preventDefault();
+            const url = document.getElementById('cfg-supabase-url').value.trim();
+            const key = document.getElementById('cfg-supabase-key').value.trim();
+
+            localStorage.setItem('LEX_SUPABASE_URL', url);
+            localStorage.setItem('LEX_SUPABASE_KEY', key);
+
+            closeModal('modal-config-supabase');
+            inicializarSupabase();
+            mostrarNotificacion('Configuración de Supabase guardada correctamente', 'exito');
+        }
+
+        function usarModoDemoLocal() {
+            modoCloud = false;
+            supabaseClient = null;
+            document.getElementById('label-modo-cloud').innerHTML = '<i class="fa-solid fa-hard-drive mr-1"></i>Modo Local';
+            document.getElementById('label-modo-cloud').className = 'text-amber-600 font-medium';
+            closeModal('modal-config-supabase');
+        }
+
+        // Login Handler
+        async function iniciarSesion(e) {
+            e.preventDefault();
+            const user = document.getElementById('login-user').value.trim();
+            const pass = document.getElementById('login-pass').value.trim();
+            const errorBox = document.getElementById('login-error-msg');
+
+            if (modoCloud && supabaseClient) {
+                try {
+                    // Try Supabase Auth first
+                    const { data, error } = await supabaseClient.auth.signInWithPassword({
+                        email: user,
+                        password: pass
+                    });
+
+                    if (error) {
+                        // Fallback check demo password
+                        if (user === 'admin@lexsystem.com' && pass === '1234') {
+                            ingresarAApp();
+                            return;
+                        }
+                        throw error;
+                    }
+
+                    ingresarAApp();
+                } catch (err) {
+                    errorBox.classList.remove('hidden');
+                    document.getElementById('login-error-text').innerText = err.message || 'Credenciales inválidas.';
+                }
+            } else {
+                // Local Fallback Validation
+                if ((user === 'admin' || user === 'admin@lexsystem.com') && pass === '1234') {
+                    ingresarAApp();
+                } else {
+                    errorBox.classList.remove('hidden');
+                    document.getElementById('login-error-text').innerText = 'Usuario o contraseña incorrectos (Usar admin / 1234)';
+                }
+            }
+        }
+
+        async function ingresarAApp() {
+            document.getElementById('login-container').classList.add('hidden');
+            document.getElementById('app-content').classList.remove('hidden');
+            await cargarDatos();
+            mostrarNotificacion('Sesión iniciada con éxito', 'exito');
+        }
+
+        function cerrarSesion() {
+            if (modoCloud && supabaseClient) {
+                supabaseClient.auth.signOut();
+            }
+            document.getElementById('app-content').classList.add('hidden');
+            document.getElementById('login-container').classList.remove('hidden');
+            document.getElementById('form-login').reset();
+            mostrarNotificacion('Sesión cerrada', 'info');
+        }
+
+        // Load Cases Data from Supabase Cloud or Local
+        async function cargarDatos() {
+            if (modoCloud && supabaseClient) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('casos')
+                        .select('*')
+                        .order('created_at', { ascending: false });
+
+                    if (error) throw error;
+                    
+                    casos = data || [];
+                } catch (err) {
+                    console.warn('Error al cargar datos de Supabase, usando local:', err);
+                    cargarDatosLocal();
+                }
+            } else {
+                cargarDatosLocal();
+            }
+
+            renderizarTodo();
+        }
+
+        function cargarDatosLocal() {
+            const dataGuardada = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (dataGuardada) {
+                try {
+                    casos = JSON.parse(dataGuardada);
+                } catch (e) {
+                    casos = [];
+                }
+            } else {
+                casos = [
+                    {
+                        id: '1',
+                        cliente: 'María Rodríguez Santos',
+                        numeroCaso: 'CJ-2026-089',
+                        asunto: 'Civil',
+                        costoTotal: 1500.00,
+                        notas: 'Proceso ejecutivo mercantil.',
+                        abonos: [
+                            { id: 'a1', fecha: '2026-02-10 10:30', monto: 500.00, metodo: 'Transferencia Bancaria', comprobante: 'TR-998231' }
+                        ]
+                    }
+                ];
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(casos));
+            }
+        }
+
+        async function guardarCasoGlobal(nuevoCaso) {
+            if (modoCloud && supabaseClient) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('casos')
+                        .insert([nuevoCaso]);
+
+                    if (error) throw error;
+                } catch (err) {
+                    console.error('Error guardando en Supabase:', err);
+                }
+            }
+
+            // Always update local cache
+            casos.unshift(nuevoCaso);
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(casos));
+        }
+
+        async function actualizarCasoGlobal(casoActualizado) {
+            if (modoCloud && supabaseClient) {
+                try {
+                    const { error } = await supabaseClient
+                        .from('casos')
+                        .update({ abonos: casoActualizado.abonos })
+                        .eq('id', casoActualizado.id);
+
+                    if (error) throw error;
+                } catch (err) {
+                    console.error('Error actualizando en Supabase:', err);
+                }
+            }
+
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(casos));
+        }
+
+        // Render functions
+        function renderizarTodo() {
+            renderizarKPIs();
+            renderizarTabla();
+            poblarSelectCasosAbono();
+        }
+
+        function renderizarKPIs() {
+            const totalCasos = casos.length;
+            let totalHonorarios = 0;
+            let totalCobrado = 0;
+
+            casos.forEach(c => {
+                totalHonorarios += Number(c.costoTotal || 0);
+                const sumAbonos = (c.abonos || []).reduce((acc, a) => acc + Number(a.monto || 0), 0);
+                totalCobrado += sumAbonos;
+            });
+
+            const totalPendiente = totalHonorarios - totalCobrado;
+
+            document.getElementById('kpi-total-casos').innerText = totalCasos;
+            document.getElementById('kpi-total-honorarios').innerText = formatearMoneda(totalHonorarios);
+            document.getElementById('kpi-total-cobrado').innerText = formatearMoneda(totalCobrado);
+            document.getElementById('kpi-total-pendiente').innerText = formatearMoneda(totalPendiente);
+        }
+
+        function renderizarTabla() {
+            const tbody = document.getElementById('tabla-casos-body');
+            const emptyState = document.getElementById('empty-state');
+            tbody.innerHTML = '';
+
+            const textoBusqueda = document.getElementById('input-busqueda').value.toLowerCase().trim();
+            const filtroEstado = document.getElementById('select-filtro-estado').value;
+
+            const casosFiltrados = casos.filter(caso => {
+                const coincideBusqueda = caso.cliente.toLowerCase().includes(textoBusqueda) || 
+                                         caso.numeroCaso.toLowerCase().includes(textoBusqueda);
+                
+                const totalAbonado = (caso.abonos || []).reduce((acc, a) => acc + Number(a.monto), 0);
+                const saldoAdeudado = caso.costoTotal - totalAbonado;
+                
+                let estado = 'PENDIENTE';
+                if (saldoAdeudado <= 0.01) {
+                    estado = 'PAGADO';
+                } else if (totalAbonado > 0) {
+                    estado = 'PARCIAL';
+                }
+
+                const coincideEstado = (filtroEstado === 'TODOS') || (filtroEstado === estado);
+                return coincideBusqueda && coincideEstado;
+            });
+
+            if (casosFiltrados.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            casosFiltrados.forEach(caso => {
+                const totalAbonado = (caso.abonos || []).reduce((acc, a) => acc + Number(a.monto), 0);
+                const saldoAdeudado = Math.max(0, caso.costoTotal - totalAbonado);
+
+                let badgeHTML = '';
+                if (saldoAdeudado <= 0.01) {
+                    badgeHTML = `<span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">Pagado Total</span>`;
+                } else if (totalAbonado > 0) {
+                    badgeHTML = `<span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">Abonado Parcial</span>`;
+                } else {
+                    badgeHTML = `<span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-100 text-rose-800">Pendiente</span>`;
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 border-b border-slate-200';
+                tr.innerHTML = `
+                    <td class="py-3.5 px-4 font-bold text-slate-800">${escapeHTML(caso.cliente)}</td>
+                    <td class="py-3.5 px-4 font-mono text-xs font-semibold text-slate-700">${escapeHTML(caso.numeroCaso)}</td>
+                    <td class="py-3.5 px-4 text-right font-medium">${formatearMoneda(caso.costoTotal)}</td>
+                    <td class="py-3.5 px-4 text-right font-medium text-emerald-600">${formatearMoneda(totalAbonado)}</td>
+                    <td class="py-3.5 px-4 text-right font-bold ${saldoAdeudado > 0 ? 'text-rose-600' : 'text-slate-400'}">${formatearMoneda(saldoAdeudado)}</td>
+                    <td class="py-3.5 px-4 text-center">${badgeHTML}</td>
+                    <td class="py-3.5 px-4 text-center">
+                        <div class="flex items-center justify-center space-x-2">
+                            <button onclick="abrirModalAbonoDirecto('${caso.id}')" title="Registrar Abono" class="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg">
+                                <i class="fa-solid fa-plus-circle text-base"></i>
+                            </button>
+                            <button onclick="verHistorialCaso('${caso.id}')" title="Ver Recibo" class="p-2 text-navy-800 hover:bg-slate-100 rounded-lg">
+                                <i class="fa-solid fa-receipt text-base"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filtrarCasos() { renderizarTabla(); }
+
+        function poblarSelectCasosAbono() {
+            const select = document.getElementById('abono-caso-id');
+            select.innerHTML = '<option value="">-- Seleccione un cliente / caso --</option>';
+
+            casos.forEach(caso => {
+                const totalAbonado = (caso.abonos || []).reduce((acc, a) => acc + Number(a.monto), 0);
+                const pendiente = Math.max(0, caso.costoTotal - totalAbonado);
+                
+                const option = document.createElement('option');
+                option.value = caso.id;
+                option.innerText = `${caso.cliente} (${caso.numeroCaso}) - Deuda: ${formatearMoneda(pendiente)}`;
+                select.appendChild(option);
+            });
+        }
+
+        function actualizarInfoPendienteAbono() {
+            const id = document.getElementById('abono-caso-id').value;
+            const infoBox = document.getElementById('abono-info-box');
+            if (!id) { infoBox.classList.add('hidden'); return; }
+
+            const caso = casos.find(c => c.id === id);
+            if (caso) {
+                const totalAbonado = (caso.abonos || []).reduce((acc, a) => acc + Number(a.monto), 0);
+                const pendiente = Math.max(0, caso.costoTotal - totalAbonado);
+
+                document.getElementById('abono-info-pendiente').innerText = formatearMoneda(pendiente);
+                document.getElementById('abono-info-total').innerText = formatearMoneda(caso.costoTotal);
+                infoBox.classList.remove('hidden');
+            }
+        }
+
+        function abrirModalAbonoDirecto(casoId) {
+            openModal('modal-nuevo-abono');
+            document.getElementById('abono-caso-id').value = casoId;
+            actualizarInfoPendienteAbono();
+        }
+
+        async function guardarNuevoCaso(e) {
+            e.preventDefault();
+            const cliente = document.getElementById('caso-cliente').value.trim();
+            const numeroCaso = document.getElementById('caso-numero').value.trim();
+            const asunto = document.getElementById('caso-asunto').value;
+            const costoTotal = parseFloat(document.getElementById('caso-costo').value);
+            const notas = document.getElementById('caso-notas').value.trim();
+
+            const nuevoCaso = {
+                id: Date.now().toString(),
+                cliente,
+                numeroCaso,
+                asunto,
+                costoTotal,
+                notas,
+                abonos: []
+            };
+
+            await guardarCasoGlobal(nuevoCaso);
+            renderizarTodo();
+
+            closeModal('modal-nuevo-caso');
+            document.getElementById('form-nuevo-caso').reset();
+            mostrarNotificacion('Caso guardado correctamente', 'exito');
+        }
+
+        async function guardarNuevoAbono(e) {
+            e.preventDefault();
+            const casoId = document.getElementById('abono-caso-id').value;
+            const monto = parseFloat(document.getElementById('abono-monto').value);
+            const metodo = document.getElementById('abono-metodo').value;
+            const comprobante = document.getElementById('abono-comprobante').value.trim();
+
+            const caso = casos.find(c => c.id === casoId);
+            if (!caso) return;
+
+            const nuevoAbono = {
+                id: Date.now().toString(),
+                fecha: new Date().toISOString().replace('T', ' ').substring(0, 16),
+                monto,
+                metodo,
+                comprobante: comprobante || 'N/A'
+            };
+
+            caso.abonos = caso.abonos || [];
+            caso.abonos.unshift(nuevoAbono);
+
+            await actualizarCasoGlobal(caso);
+            renderizarTodo();
+
+            closeModal('modal-nuevo-abono');
+            document.getElementById('form-nuevo-abono').reset();
+            mostrarNotificacion(`Abono de ${formatearMoneda(monto)} registrado`, 'exito');
+        }
+
+        function verHistorialCaso(casoId) {
+            const caso = casos.find(c => c.id === casoId);
+            if (!caso) return;
+
+            const totalAbonado = (caso.abonos || []).reduce((acc, a) => acc + Number(a.monto), 0);
+            const saldoAdeudado = Math.max(0, caso.costoTotal - totalAbonado);
+
+            document.getElementById('detalle-cliente').innerText = caso.cliente;
+            document.getElementById('detalle-caso-num').innerText = caso.numeroCaso;
+            document.getElementById('detalle-costo-total').innerText = formatearMoneda(caso.costoTotal);
+            document.getElementById('detalle-total-abonado').innerText = formatearMoneda(totalAbonado);
+            document.getElementById('detalle-valor-adeudado').innerText = formatearMoneda(saldoAdeudado);
+            document.getElementById('detalle-fecha-impresion').innerText = `Fecha: ${new Date().toLocaleDateString('es-ES')}`;
+
+            const tbodyAbonos = document.getElementById('detalle-tabla-abonos');
+            tbodyAbonos.innerHTML = '';
+
+            (caso.abonos || []).forEach(abono => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="py-2 px-3 font-mono">${abono.fecha}</td>
+                    <td class="py-2 px-3 font-semibold">${escapeHTML(abono.metodo)}</td>
+                    <td class="py-2 px-3 text-slate-500">${escapeHTML(abono.comprobante)}</td>
+                    <td class="py-2 px-3 text-right font-bold text-emerald-700">${formatearMoneda(abono.monto)}</td>
+                `;
+                tbodyAbonos.appendChild(tr);
+            });
+
+            openModal('modal-historial');
+        }
+
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        function mostrarNotificacion(mensaje, tipo = 'exito') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto px-4 py-3 rounded-lg shadow-xl text-xs font-medium bg-slate-900 text-white border border-gold-500`;
+            toast.innerHTML = `<span>${escapeHTML(mensaje)}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function formatearMoneda(valor) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(valor || 0);
+        }
+
+        function escapeHTML(str) {
+            return (str || '').replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+        }
+    </script>
+</body>
+</html>
